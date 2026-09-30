@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Калькулятор долей участников ООО</title>
+<style>
+:root{--bg:#fff;--surface:#f5f5f7;--border:#c8c8cf;--accent:#6f5bd3;--soft:#eeeafd;--ink:#202124;--muted:#6b7280;--danger:#c62828}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px Arial,sans-serif}.wrap{max-width:820px;margin:44px auto;padding:0 14px}h1{font-size:20px;margin:0 0 16px}.card,.acc{border:1px solid var(--border);border-radius:10px;background:var(--surface)}.card{padding:18px}.top,.row,.flex{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}.top{margin-bottom:16px}.field{display:flex;flex-direction:column;gap:5px;min-width:0}.field label,.small{font-size:12px;color:var(--muted)}input,select,button{font:inherit}input,select{height:38px;border:1px solid var(--border);border-radius:7px;background:#fff;padding:0 10px;outline:none;width:100%}input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 2px #6f5bd333}.invalid{border-color:var(--danger)!important;background:#fff5f5}.err{color:var(--danger);font-size:12px}.btn{height:38px;border:1px solid var(--border);background:#fff;border-radius:7px;padding:0 13px;cursor:pointer}.btn:hover{border-color:var(--accent);color:var(--accent)}.reset{margin-left:auto}.seg{display:inline-flex;border:1px solid var(--border);border-radius:7px;overflow:hidden;background:#fff}.seg button{height:36px;border:0;border-left:1px solid var(--border);background:#fff;padding:0 12px;cursor:pointer}.seg button:first-child{border-left:0}.seg button.on{background:var(--accent);color:#fff}.heads,.prow{display:grid;grid-template-columns:minmax(160px,1fr) 145px 135px 38px;gap:9px;align-items:start}.heads{font-size:12px;color:var(--muted);margin-bottom:7px}.prow{margin-bottom:9px}.remove{height:38px;border:1px solid var(--border);background:#fff;border-radius:7px;font-size:18px;cursor:pointer}.add{border:0;background:none;color:var(--accent);font-weight:600;padding:5px 0;cursor:pointer}.summary{margin-top:12px;background:var(--soft);border:1px solid transparent;border-radius:7px;padding:11px 13px;line-height:1.6}.summary.bad,.note.bad{background:#fff0f0;border-color:#e7aaaa;color:var(--danger)}.ok{color:var(--accent);font-weight:600}.acc{margin-top:9px;overflow:hidden}.acc>button{width:100%;border:0;background:transparent;padding:13px 15px;text-align:left;font-weight:600;cursor:pointer;display:flex;justify-content:space-between}.panel{display:none;border-top:1px solid var(--border);padding:14px}.acc.open .panel{display:block}.note{border:1px solid var(--border);background:#fff;border-radius:7px;padding:9px 11px;margin:9px 0}.note.good{background:var(--soft);border-color:#bdb2ef}table{width:100%;border-collapse:collapse;min-width:560px}th,td{border-bottom:1px solid #ddd;padding:8px 8px 8px 0;text-align:right;vertical-align:top}th:first-child,td:first-child{text-align:left}th{font-size:12px;color:var(--muted);font-weight:400}.tablewrap{overflow:auto}.w200{width:210px}.w160{width:160px}.scenario-controls{margin:10px 0}.panel input{min-width:100px}.money{font-variant-numeric:tabular-nums}
+@media(max-width:650px){.wrap{margin:22px auto}.card{padding:12px}.heads{display:none}.prow{grid-template-columns:1fr 38px;border:1px solid var(--border);border-radius:8px;padding:9px;background:#fff}.prow .name{grid-column:1}.prow .remove{grid-column:2;grid-row:1}.prow .amount{grid-column:1}.prow .share{grid-column:2/3;min-width:120px}.reset{margin-left:0}.top>*{flex:1 1 160px}.top .reset{flex:0 0 auto}}
+</style>
+</head>
+<body><main class="wrap">
+<h1>Калькулятор долей участников ООО</h1>
+<section class="card">
+<div class="top">
+ <div class="field w200"><label>Уставный капитал, руб.</label><input id="capital" inputmode="decimal" value="10000"><span class="err" id="capitalErr"></span></div>
+ <div class="field"><label>Показывать доли:</label><div class="seg" id="modeSeg"><button data-v="percent" class="on">%</button><button data-v="fraction">Дробь</button></div></div>
+ <button class="btn reset" id="reset">Сбросить</button>
+</div>
+<div class="heads"><span>Участник</span><span>Вклад, руб.</span><span id="shareHead">Доля, %</span><span></span></div>
+<div id="participants"></div>
+<button class="add" id="add">+ Добавить участника</button>
+<div class="summary" id="summary"></div>
+</section>
+<div id="accordions">
+ <section class="acc" data-key="share"><button>Распределить долю <span>+</span></button><div class="panel" id="sharePanel"></div></section>
+ <section class="acc" data-key="capital"><button>Изменить УК <span>+</span></button><div class="panel" id="capitalPanel"></div></section>
+ <section class="acc" data-key="profit"><button>Распределить прибыль <span>+</span></button><div class="panel" id="profitPanel"></div></section>
+</div>
+</main>
+<script>
+(()=>{"use strict";
+let nextId=1, mode="percent", participants=[], openKey=null;
+const keepFocus=(el,render)=>{
+  const id=el.id;
+  const data={...el.dataset};
+  const startPos=typeof el.selectionStart==="number"?el.selectionStart:null;
+  const endPos=typeof el.selectionEnd==="number"?el.selectionEnd:startPos;
+
+  render();
+
+  let target=id?document.getElementById(id):null;
+
+  if(!target && data.act && data.id){
+    target=document.querySelector(`[data-act="${CSS.escape(data.act)}"][data-id="${CSS.escape(data.id)}"]`);
+  }
+  if(!target && data.manualShare){
+    target=document.querySelector(`[data-manual-share="${CSS.escape(data.manualShare)}"]`);
+  }
+  if(!target && data.extra){
+    target=document.querySelector(`[data-extra="${CSS.escape(data.extra)}"]`);
+  }
+  if(!target && data.profitPct){
+    target=document.querySelector(`[data-profit-pct="${CSS.escape(data.profitPct)}"]`);
+  }
+
+  if(target){
+    target.focus({preventScroll:true});
+    if(startPos!==null && target.setSelectionRange){
+      const a=Math.min(startPos,target.value.length);
+      const b=Math.min(endPos??startPos,target.value.length);
+      target.setSelectionRange(a,b);
+    }
+  }
+};
+const $=s=>document.querySelector(s), esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const parse=s=>{s=String(s??"").trim().replace(",",".");let v=Number(s);return Number.isFinite(v)?v:0};
+const moneyErr=s=>{s=String(s??"").trim();if(!s)return null;if(s.startsWith("-"))return"Только неотрицательные значения";if(!/^\d*([.,]\d*)?$/.test(s))return"Введите число";if(!/^\d+([.,]\d{0,2})?$/.test(s))return"Не более 2 знаков после запятой";return null};
+const pctErr=s=>{s=String(s??"").trim();if(!s)return null;if(s.startsWith("-"))return"Только неотрицательные значения";if(!/^\d*([.,]\d*)?$/.test(s))return"Введите число";if(!/^\d+([.,]\d{0,4})?$/.test(s))return"Не более 4 знаков после запятой";if(parse(s)>100)return"Процент от 0 до 100";return null};
+const capErr=s=>{if(!String(s).trim()||(!moneyErr(s)&&parse(s)<=0))return"Укажите размер уставного капитала";return moneyErr(s)};
+const kopecks=v=>Math.round(v*100), round=v=>kopecks(v)/100;
+const fmtMoney=v=>Number.isFinite(v)?new Intl.NumberFormat("ru-RU",{minimumFractionDigits:2,maximumFractionDigits:2}).format(v)+" руб.":"—";
+const fmtPct=v=>Number.isFinite(v)?new Intl.NumberFormat("ru-RU",{minimumFractionDigits:2,maximumFractionDigits:2}).format(v)+"%":"—";
+const inputStr=(v,d)=>String(Number(v.toFixed(d))).replace(".",",");
+const gcd=(a,b)=>{while(b){let t=b;b=a%b;a=t}return a};
+const fraction=(r,c)=>{let a=kopecks(r),b=kopecks(c);if(b<=0)return"—";if(a===0)return"0";let g=gcd(a,b);return `${a/g}/${b/g}`};
+const cap=()=>capErr($("#capital").value)?0:parse($("#capital").value);
+const rubles=p=>p.last==="percent"?(pctErr(p.percent)?0:round(cap()*parse(p.percent)/100)):(moneyErr(p.amount)?0:parse(p.amount));
+const percent=p=>p.last==="percent"?(pctErr(p.percent)?0:parse(p.percent)):(cap()>0?rubles(p)/cap()*100:0);
+const mk=(name,amount="")=>({id:nextId++,name,amount,percent:"",last:"amount"});
+function demo(){participants=[mk("Участник 1","6000"),mk("Участник 2","1000"),mk("Участник 3","3000")]}
+function rows(){return participants.map((p,i)=>({id:p.id,name:p.name.trim()||`Участник ${i+1}`,rubles:rubles(p)}))}
+function renderMain(){
+ let c=cap(), ce=capErr($("#capital").value); $("#capitalErr").textContent=ce||"";$("#capital").classList.toggle("invalid",!!ce);
+ $("#shareHead").textContent=mode==="percent"?"Доля, %":"Доля, дробь";
+ $("#modeSeg").querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.v===mode));
+ $("#participants").innerHTML=participants.map((p,i)=>{
+   let ae=p.last==="amount"?moneyErr(p.amount):null, pe=p.last==="percent"?pctErr(p.percent):null, r=rubles(p);
+   let av=p.last==="amount"?p.amount:(!pe&&c>0&&p.percent.trim()?inputStr(r,2):"");
+   let pv=p.last==="percent"?p.percent:(!ae&&c>0&&p.amount.trim()?inputStr(percent(p),4):"");
+   let share=mode==="percent"?`<div class="field share"><label class="small">Доля, %</label><input data-act="percent" data-id="${p.id}" value="${esc(pv)}" class="${pe?"invalid":""}" inputmode="decimal"><span class="err">${esc(pe||"")}</span></div>`:
+   `<div class="field share"><label class="small">Доля, дробь</label><input readonly value="${esc(c>0?fraction(r,c):"—")}"></div>`;
+   return `<div class="prow"><div class="field name"><label class="small">Участник</label><input data-act="name" data-id="${p.id}" value="${esc(p.name)}"></div><div class="field amount"><label class="small">Вклад, руб.</label><input data-act="amount" data-id="${p.id}" value="${esc(av)}" class="${ae?"invalid":""}" inputmode="decimal"><span class="err">${esc(ae||"")}</span></div>${share}<button class="remove" data-act="remove" data-id="${p.id}" ${participants.length<=1?"disabled":""}>−</button></div>`
+ }).join("");
+ let total=rows().reduce((s,r)=>s+r.rubles,0), diff=kopecks(c)-kopecks(total), box=$("#summary");
+ if(c<=0)box.innerHTML='<span class="err">Укажите размер уставного капитала</span>';
+ else box.innerHTML=`Распределено: <b>${fmtMoney(total)}</b> (${fmtPct(total/c*100)})<br>Осталось распределить: <b>${fmtMoney(Math.max(diff,0)/100)}</b> (${fmtPct(Math.max(diff,0)/100/c*100)})`+(diff===0?'<br><span class="ok">Уставный капитал распределен полностью.</span>':diff<0?`<br><span class="err"><b>Доли превышают уставный капитал на ${fmtMoney(-diff/100)} (${fmtPct((-diff/100/c)*100)}).</b></span>`:"");
+ box.classList.toggle("bad",c>0&&diff<0);
+ if(openKey) renderScenario(openKey);
+}
+$("#participants").addEventListener("input",e=>{let el=e.target,id=+el.dataset.id,act=el.dataset.act,p=participants.find(x=>x.id===id);if(!p)return;if(act==="name")p.name=el.value;if(act==="amount"){p.amount=el.value;p.last="amount"}if(act==="percent"){p.percent=el.value;p.last="percent"}keepFocus(el,renderMain)});
+$("#participants").addEventListener("click",e=>{if(e.target.dataset.act==="remove"&&participants.length>1){participants=participants.filter(p=>p.id!==+e.target.dataset.id);renderMain()}});
+$("#capital").addEventListener("input",e=>keepFocus(e.target,renderMain));
+$("#modeSeg").addEventListener("click",e=>{if(e.target.dataset.v){mode=e.target.dataset.v;renderMain()}});
+$("#add").onclick=()=>{if(participants.length<100){participants.push(mk(`Участник ${participants.length+1}`));renderMain()}};
+$("#reset").onclick=()=>{$("#capital").value="10000";participants=[mk("Участник 1"),mk("Участник 2"),mk("Участник 3")];mode="percent";openKey=null;document.querySelectorAll(".acc").forEach(a=>a.classList.remove("open"));renderMain()};
+document.querySelectorAll(".acc>button").forEach(b=>b.onclick=()=>{let a=b.parentElement,k=a.dataset.key;document.querySelectorAll(".acc").forEach(x=>x.classList.remove("open"));openKey=openKey===k?null:k;if(openKey){a.classList.add("open");renderScenario(k)}});
+let shareState={leaver:null,mode:"prop",manual:{}}, changeState={newCap:"",mode:"keep",extra:{}}, profitState={amount:"",mode:"prop",manual:{}};
+function seg(name,val,opts){return `<div class="seg scenario-controls" data-seg="${name}">${opts.map(([v,l])=>`<button data-v="${v}" class="${v===val?"on":""}">${l}</button>`).join("")}</div>`}
+function note(s,bad=false,good=false){return `<div class="note ${bad?"bad":good?"good":""}">${s}</div>`}
+function renderScenario(k){if(k==="share")renderShare();if(k==="capital")renderChange();if(k==="profit")renderProfit()}
+function renderShare(){
+ let rs=rows(), el=$("#sharePanel");if(rs.length<2){el.innerHTML=note("Для распределения доли нужно минимум два участника.");return}
+ if(!shareState.leaver||!rs.some(r=>r.id===shareState.leaver))shareState.leaver=rs[0].id;
+ let l=rs.find(r=>r.id===shareState.leaver), oth=rs.filter(r=>r.id!==l.id), os=oth.reduce((s,r)=>s+r.rubles,0), add=oth.map(r=>shareState.mode==="prop"?(os>0?l.rubles*r.rubles/os:0):(moneyErr(shareState.manual[r.id]||"")?0:parse(shareState.manual[r.id]||""))), sum=add.reduce((a,b)=>a+b,0),diff=kopecks(l.rubles)-kopecks(sum);
+ el.innerHTML=(cap()<=0?note("Укажите размер уставного капитала в основном расчёте.",true):"")+`<div class="flex"><div class="field w200"><label>Выбывающий участник</label><select id="leaver">${rs.map(r=>`<option value="${r.id}" ${r.id===l.id?"selected":""}>${esc(r.name)}</option>`).join("")}</select></div><p>Доля: <b>${fmtMoney(l.rubles)}</b> (${fmtPct(cap()>0?l.rubles/cap()*100:0)})</p></div>`+seg("share",shareState.mode,[["prop","Пропорционально текущим долям оставшихся"],["manual","Вручную"]])+`<div class="tablewrap"><table><thead><tr><th>Участник</th><th>Было</th><th>Передаётся</th><th>Стало</th><th>Доля</th></tr></thead><tbody>${oth.map((r,i)=>`<tr><td>${esc(r.name)}</td><td>${fmtMoney(r.rubles)}</td><td>${shareState.mode==="manual"?`<input data-manual-share="${r.id}" value="${esc(shareState.manual[r.id]||"")}" class="${moneyErr(shareState.manual[r.id]||"")?"invalid":""}">`:fmtMoney(add[i])}</td><td>${fmtMoney(r.rubles+add[i])}</td><td>${fmtPct(cap()>0?(r.rubles+add[i])/cap()*100:0)}</td></tr>`).join("")}</tbody></table></div>`+(shareState.mode==="manual"?note(diff===0?`Распределено полностью: ${fmtMoney(sum)}.`:`Распределено ${fmtMoney(sum)} из ${fmtMoney(l.rubles)}. ${diff>0?"Осталось распределить "+fmtMoney(diff/100):"Превышение на "+fmtMoney(-diff/100)}.`,diff!==0,diff===0):"");
+ $("#leaver").onchange=e=>{shareState.leaver=+e.target.value;renderShare()};bindSeg(el,"share",v=>{shareState.mode=v;renderShare()});el.querySelectorAll("[data-manual-share]").forEach(x=>x.oninput=e=>{shareState.manual[+e.target.dataset.manualShare]=e.target.value;keepFocus(e.target,renderShare)})
+}
+function renderChange(){
+ let rs=rows(),s=changeState,nErr=s.newCap.trim()?moneyErr(s.newCap)||(parse(s.newCap)<=0?"Укажите новый УК больше 0":null):null,nc=nErr?0:parse(s.newCap), errs=rs.map(r=>moneyErr(s.extra[r.id]||"")), extraSum=rs.reduce((a,r,i)=>a+(errs[i]?0:parse(s.extra[r.id]||"")),0), expected=cap()+extraSum,base=s.mode==="keep"?nc:(nc>0?nc:expected),after=rs.map((r,i)=>s.mode==="keep"?(cap()>0?r.rubles/cap()*nc:0):r.rubles+(errs[i]?0:parse(s.extra[r.id]||""))),mismatch=s.mode==="extra"&&nc>0?kopecks(nc)-kopecks(expected):0,el=$("#capitalPanel");
+ el.innerHTML=(cap()<=0?note("Укажите размер уставного капитала в основном расчёте.",true):"")+`<div class="flex"><div class="field w200"><label>Текущий УК</label><input readonly value="${fmtMoney(cap())}"></div><div class="field w200"><label>Новый УК, руб.</label><input id="newCap" value="${esc(s.newCap)}" class="${nErr?"invalid":""}"><span class="err">${esc(nErr||"")}</span></div></div>`+seg("change",s.mode,[["keep","Сохранить соотношение долей"],["extra","Дополнительные вклады"]])+`<div class="tablewrap"><table><thead><tr><th>Участник</th><th>Было</th><th>Было, %</th>${s.mode==="extra"?"<th>Доп. вклад</th>":""}<th>Стало</th><th>Стало, %</th></tr></thead><tbody>${rs.map((r,i)=>`<tr><td>${esc(r.name)}</td><td>${fmtMoney(r.rubles)}</td><td>${fmtPct(cap()>0?r.rubles/cap()*100:0)}</td>${s.mode==="extra"?`<td><input data-extra="${r.id}" value="${esc(s.extra[r.id]||"")}" class="${errs[i]?"invalid":""}"></td>`:""}<td>${s.mode==="keep"&&nc<=0?"—":fmtMoney(after[i])}</td><td>${s.mode==="keep"&&nc<=0?"—":fmtPct(base>0?after[i]/base*100:0)}</td></tr>`).join("")}</tbody></table></div>`+(s.mode==="keep"&&nc<=0?note("Введите новый УК, чтобы увидеть новые суммы."):"")+(s.mode==="extra"?`<p>УК после внесения дополнительных вкладов: <b>${fmtMoney(expected)}</b></p>`:"")+(mismatch?note(`Новый УК отличается от текущего УК с доп. вкладами на ${fmtMoney(Math.abs(mismatch)/100)}. Проценты «Стало» рассчитаны от указанного нового УК.`,true):"");
+ $("#newCap").oninput=e=>{s.newCap=e.target.value;keepFocus(e.target,renderChange)};bindSeg(el,"change",v=>{s.mode=v;renderChange()});el.querySelectorAll("[data-extra]").forEach(x=>x.oninput=e=>{s.extra[+e.target.dataset.extra]=e.target.value;keepFocus(e.target,renderChange)})
+}
+function renderProfit(){
+ let rs=rows(),s=profitState,ae=moneyErr(s.amount),profit=ae?0:parse(s.amount),sum=rs.reduce((a,r)=>a+r.rubles,0),errs=rs.map(r=>pctErr(s.manual[r.id]||"")),w=rs.map((r,i)=>s.mode==="prop"?(sum>0?r.rubles/sum*100:0):(errs[i]?0:parse(s.manual[r.id]||""))),ws=w.reduce((a,b)=>a+b,0),pay=w.map(x=>profit*x/100),tot=pay.reduce((a,b)=>a+b,0),el=$("#profitPanel");
+ el.innerHTML=`<div class="field w200"><label>Сумма к распределению, руб.</label><input id="profitAmount" value="${esc(s.amount)}" class="${ae?"invalid":""}"><span class="err">${esc(ae||"")}</span></div>`+seg("profit",s.mode,[["prop","Пропорционально долям в УК"],["manual","Задать пропорции вручную"]])+(s.mode==="prop"&&sum<=0?note("В основном расчёте не указаны доли участников.",true):"")+(s.mode==="prop"&&sum>0&&kopecks(sum)!==kopecks(cap())?note("Уставный капитал распределён не полностью — прибыль делится пропорционально указанным долям участников."):"")+`<div class="tablewrap"><table><thead><tr><th>Участник</th><th>Доля в УК</th><th>Доля выплаты</th><th>Выплата</th></tr></thead><tbody>${rs.map((r,i)=>`<tr><td>${esc(r.name)}</td><td>${fmtPct(cap()>0?r.rubles/cap()*100:0)}</td><td>${s.mode==="manual"?`<input data-profit-pct="${r.id}" value="${esc(s.manual[r.id]||"")}" class="${errs[i]?"invalid":""}">`:fmtPct(w[i])}</td><td>${fmtMoney(pay[i])}</td></tr>`).join("")}<tr><td><b>Итого</b></td><td></td><td><b>${fmtPct(ws)}</b></td><td><b>${fmtMoney(tot)}</b></td></tr></tbody></table></div>`+(s.mode==="manual"&&Math.abs(ws-100)>1e-9?note(`Сумма пропорций должна составлять 100%. Сейчас: ${fmtPct(ws)}.`,true):"");
+ $("#profitAmount").oninput=e=>{s.amount=e.target.value;keepFocus(e.target,renderProfit)};bindSeg(el,"profit",v=>{s.mode=v;renderProfit()});el.querySelectorAll("[data-profit-pct]").forEach(x=>x.oninput=e=>{s.manual[+e.target.dataset.profitPct]=e.target.value;keepFocus(e.target,renderProfit)})
+}
+function bindSeg(root,name,fn){root.querySelectorAll(`[data-seg="${name}"] button`).forEach(b=>b.onclick=()=>fn(b.dataset.v))}
+demo();renderMain();
+})();
+</script>
+</body></html>
